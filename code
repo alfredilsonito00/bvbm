@@ -1,0 +1,87 @@
+#include "DHT.h"
+
+#define DHTPIN A1 // pino que estamos conectado
+#define DHTTYPE DHT11 // DHT 11
+#define pinoUmidade  A0
+#define pinoMangueira  7
+
+
+DHT dht(DHTPIN, DHTTYPE);
+#include <SoftwareSerial.h>
+bool status= 0;
+SoftwareSerial bluetooth(10, 11); // RX, TX
+const int pinoLDR = A5;
+const int pinoLed = 9;
+int Acao =0;
+float Umid=0.0, Ref = 0.0, Erro = 0.0f, D_Umid=2.5f; 
+String inputBuffer = ""; 
+void setup() 
+{
+  Serial.begin(9600);
+  dht.begin();
+  bluetooth.begin(9600);
+  pinMode(pinoLDR, INPUT);
+  pinMode(pinoLed, OUTPUT);
+  pinMode(pinoUmidade, INPUT);
+  pinMode(pinoMangueira, OUTPUT);
+  Serial.println("Digite algo para enviar via Bluetooth:");
+}
+ 
+void loop() 
+{
+  Ref = 20.0f + 60.0f*(analogRead(A1)/1024.0f);
+  Umid = (5.0f*analogRead(pinoUmidade)/1024.0f - 0.5f)/0.010f;
+  Erro = -(Ref-Umid);
+  if(Erro > D_Umid) { Acao = 1; } if(Erro < -D_Umid) { Acao = 0; }
+  if(Acao) { digitalWrite(pinoMangueira, HIGH);}
+  else { digitalWrite(pinoMangueira, LOW);}
+  Serial.print("Umidade do solo: ");
+  Serial.print(analogRead(pinoUmidade));
+  Serial.print("% ");
+  float h = dht.readHumidity();
+  float t = dht.readTemperature();
+  int l = analogRead(pinoLDR);
+  if (isnan(t) || isnan(h)) 
+  {
+    Serial.println("Failed to read from DHT");
+  } 
+  else
+  {
+    Serial.print("iluminacao: ");
+    Serial.print(l);
+    Serial.print("%  Umidade do ar: ");
+    Serial.print(h);
+    Serial.print("%  ");
+    Serial.print("Temperatura: ");
+    Serial.print(t);
+    Serial.println("*C");
+  }
+  if (Serial.available()) {
+    char data = Serial.read();
+    bluetooth.write(data);
+  }
+  if(analogRead(pinoLDR) > 600){
+    digitalWrite(pinoLed, HIGH);
+  }  
+  else{
+    digitalWrite(pinoLed, LOW);
+  }
+  int nchar = bluetooth.available();
+  if (bluetooth.available()) {
+    char data = bluetooth.read();
+    if (data == '\n') {
+    bluetooth.print("Umidade: ");
+    bluetooth.print(h);
+    bluetooth.print("%  ");
+    bluetooth.print("Temperatura: ");
+    bluetooth.print(t);
+    bluetooth.print(" *C\n");
+    Ref = inputBuffer.toFloat();
+    Serial.print("Novo valor de Ref recebido via Bluetooth: ");
+    Serial.println(Ref);
+    inputBuffer = "";
+    } 
+    else { inputBuffer += data;}
+  }
+  delay(1000);
+}
